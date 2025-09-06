@@ -93,3 +93,41 @@ class PreprocessText:
         # Concatenate all the embedded inputs and dimension keeps to 0 so that it doesn't change the batch size
         # return size (num_batches × batch_size, max_length, output_dim)
         return input_embeddings
+
+### sinusoidal positional embedding:-
+
+# PE(pos, 2i) = sin(pos / 10000^(2i / d_model))
+# PE(pos, 2i+1) = cos(pos / 10000^(2i / d_model))
+
+# where pos is the position, i is the index of the dimension vector embedding, and d_model is the output dimension of the embedding layer.
+# 10000^2i/d​ ensures that each dimension of the positional embedding has a different frequency.
+# why use this ? this gives unqiue and relative position to each word in the sequence.
+
+### rotary positional embedding:-
+# does not add positional information to the embeddings. 
+# Instead, it rotates the Query and Key vectors based on their absolute position.
+
+# its like rotating the vector(quesry(m) and key(n)) in 2D space based on its position with theta angle.
+# when we do dot product of query and key, it is the function of the m-n
+# [https://arxiv.org/pdf/2104.09864]
+
+### learned positional embedding
+
+# initialize the positional embedding matrix with random values
+# learn the positional embedding matrix during training
+
+# final_embedding = word_embedding + positional_embedding{learned, embedding}
+
+### relative positional embedding:-
+#  the attention score between two tokens should not depend on their absolute positions, 
+# but rather on the offset or distance between them.
+
+# Instead of adding positional information to the initial word embeddings, RPE injects the positional information directly into the attention score calculation.
+
+# The standard attention score between a query vector Qi (at position i) and a key vector Kj (at position j) is calculated by their dot product: 
+# Scoreij = Qi ⋅ Kj
+
+# With RPE, we introduce a bias term that is based on the relative distance j-i. 
+# The model learns a unique embedding vector for each possible relative position
+# New_score = Qi ⋅ Kj + b(j-i) {trainable parameter like penalty added to attention score}
+# It directly tells the attention mechanism to "add a bonus/penalty to your score based on how far apart these two words are.
