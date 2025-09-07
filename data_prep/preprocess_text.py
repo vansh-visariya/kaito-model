@@ -22,8 +22,10 @@ class GPTDataset(Dataset):
 
         # Tokenize the entire text
         token_ids = tokenizer.encode(txt, allowed_special={"<|endoftext|>"})
+        print(f"[DEBUG] Tokenized text length: {len(token_ids)}")
 
         # Use a sliding window to chunk the book into overlapping sequences of max_length
+        print(f"[DEBUG] size of token_ids: {len(token_ids) - MAX_LENGTH}")
         for i in range(0, len(token_ids) - MAX_LENGTH, STRIDE):
             input_chunk = token_ids[i:i + MAX_LENGTH]
             target_chunk = token_ids[i + 1: i + MAX_LENGTH + 1]
@@ -31,6 +33,7 @@ class GPTDataset(Dataset):
             self.target_ids.append(torch.tensor(target_chunk))
         # input = [0,1,2,3]
         # target = [1,2,3,4]
+        print(f"[DEBUG] Number of chunks: {len(self.input_ids)}")
 
     def __len__(self):
         return len(self.input_ids)
@@ -39,7 +42,7 @@ class GPTDataset(Dataset):
         return self.input_ids[idx], self.target_ids[idx]
 
 class PreprocessText:
-    def __init__(self, file_path = "./the-verdict.txt"):
+    def __init__(self, file_path = "the-verdict.txt"):
         self.file_path = file_path
         self.text = ""
     
@@ -58,6 +61,8 @@ class PreprocessText:
         # Initialize the tokenizer
         tokenizer = tiktoken.get_encoding("gpt2")
 
+        print(f"[DEBUG] Number of tokens in text: {len(tokenizer.encode(self.text))}")
+
         # Create dataset
         dataset = GPTDataset(self.text, tokenizer)
 
@@ -73,13 +78,17 @@ class PreprocessText:
         return dataloader
     
     def embedding(self, dataloader):
-        embedding_layer = torch.nn.Embedding(VOCAB_SIZE, OUTPUT_DIM)
+        embedding_layer = torch.nn.Embedding(VOCAB_SIZE, OUTPUT_DIM) # token emdedding (50257, 768)
         all_embedded_inputs = []
+
+        print("[DEBUG] Dataloader length:", len(dataloader))
 
         # Iterate over the dataloader and embed the input_ids
         for input_ids, _ in dataloader:
             embedded_input = embedding_layer(input_ids)
             all_embedded_inputs.append(embedded_input)
+
+        all_embedded_inputs = torch.cat(all_embedded_inputs, dim=0)
         
         ## Here i can also use different type of positional embedding like sinusoidal embedding and rotary embedding
         # This is learned positional embedding
@@ -92,6 +101,13 @@ class PreprocessText:
 
         # Concatenate all the embedded inputs and dimension keeps to 0 so that it doesn't change the batch size
         # return size (num_batches × batch_size, max_length, output_dim)
+        return input_embeddings
+    
+    def preprocess(self):
+        self.load_text()
+        self.clean_text()
+        dataloader = self.create_dataloader()
+        input_embeddings = self.embedding(dataloader)
         return input_embeddings
 
 ### sinusoidal positional embedding:-
