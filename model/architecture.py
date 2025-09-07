@@ -14,7 +14,7 @@ import torch
 
 class LayerNorm(nn.Module):
     def __init__(self, embedding_dim):
-        super.__init__()
+        super().__init__()
         self.eps = 1e-5
         # scale and shift helps to controling covariate shift
         # covariate shift is a change in the distribution of the input data to a model, but same output function
@@ -40,7 +40,7 @@ class LayerNorm(nn.Module):
 # which helps the model to learn better.
 class Gelu(nn.Module):
     def __init__(self):
-        super.__init__()
+        super().__init__()
     
     def forward(self, x):
         # gelu approximation
@@ -48,7 +48,7 @@ class Gelu(nn.Module):
 
 class FeedForward(nn.Module):
     def __init__(self):
-        super.__init__()
+        super().__init__()
         # this enlargement and again to original dimension helps the model to learn better.
         # its like trying to extract as much information as possible from the input.
         self.layer = nn.Sequential(
@@ -62,7 +62,7 @@ class FeedForward(nn.Module):
 
 class TransformerBlock(nn.Module):
     def __init__(self):
-        super.__init__()
+        super().__init__()
         self.attention = multihead_attention(
             d_input = OUTPUT_DIM,
             d_output = OUTPUT_DIM,

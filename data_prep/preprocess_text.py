@@ -42,7 +42,7 @@ class GPTDataset(Dataset):
         return self.input_ids[idx], self.target_ids[idx]
 
 class PreprocessText:
-    def __init__(self, file_path = "the-verdict.txt"):
+    def __init__(self, file_path = "data_prep/the-verdict.txt"):
         self.file_path = file_path
         self.text = ""
     

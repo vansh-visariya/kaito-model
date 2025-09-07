@@ -90,7 +90,7 @@ class multihead_attention(nn.Module):
         context_vec = (attn_weights @ values).transpose(1, 2) 
         
         # Combine heads, where self.d_out = self.num_heads * self.head_dim
-        context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)
+        context_vec = context_vec.contiguous().view(b, num_tokens, self.d_output)
         context_vec = self.out_proj(context_vec) # optional projection
 
         # The output is a new (2, 512, 768) tensor where each token's vector is now context-aware, 
