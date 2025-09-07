@@ -8,6 +8,7 @@
 # 4. transformer block 
 
 from config import *
+from multi_attention.attention import multihead_attention
 import torch.nn as nn
 import torch
 
@@ -62,6 +63,32 @@ class FeedForward(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self):
         super.__init__()
-    
+        self.attention = multihead_attention(
+            d_input = OUTPUT_DIM,
+            d_output = OUTPUT_DIM,
+            context_length = OUTPUT_DIM,
+            num_heads = N_HEADS,
+            dropout = DROPOUT,
+            qkv_bias = qkv_bias # False
+        )
+        self.layernorm1 = LayerNorm(OUTPUT_DIM)
+        self.layernorm2 = LayerNorm(OUTPUT_DIM)
+        self.feedforward = FeedForward()
+        self.dropout = nn.Dropout(DROPOUT)
+
     def forward(self, x):
-        pass
+        # shortcut connection 1
+        shortcut = x
+        x = self.layernorm1(x)
+        x = self.attention(x)  # (batch_size, context_length, embedding_dim)
+        x = self.dropout(x)
+        x = x + shortcut
+
+        # shortcut connection 2
+        shortcut = x
+        x = self.layernorm2(x)
+        x = self.feedforward(x)
+        x = self.dropout(x)
+        x = x + shortcut
+
+        return x
