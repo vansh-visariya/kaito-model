@@ -47,7 +47,7 @@ class multihead_attention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         # It creates a permanent "buffer" in the model for the causal attention mask.
-        self.register_buffer(
+        self.register_buffer(   # move to device (cuda if available)
             "mask",
             # Creates a matrix of ones with the shape (context_length, context_length)
             # torch.triu(..., diagonal=1) sets all elements on and below the main diagonal to 0,
