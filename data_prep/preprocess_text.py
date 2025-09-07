@@ -4,7 +4,7 @@
 # 3. prepare dataloader for the input which we will pass to model for training
 #         a. create dataset
 #         b. create dataloader 
-# 4. embed the input_ids using embedding layer and add position embeddings to it
+# 4. embed the input_ids using embedding layer and add position embeddings to it (this is done in the model)
 
 import re
 import tiktoken
@@ -81,48 +81,15 @@ class PreprocessText:
 
         return dataloader
     
-    def embedding(self, dataloader=None, text=None):
-        embedding_layer = torch.nn.Embedding(VOCAB_SIZE, OUTPUT_DIM) # token emdedding (50257, 768)
-
-        ## Here i can also use different type of positional embedding like sinusoidal embedding and rotary embedding
-        # This is learned positional embedding
-        pos_embedding_layer = torch.nn.Embedding(MAX_LENGTH, OUTPUT_DIM) # position embedding (512, 768)
-        all_embedded_inputs = []
-
-        if text is not None:
-            embedded_input = embedding_layer(text)  # shape: [1, seq_len, embed_dim]
-            pos_embeddings = pos_embedding_layer(torch.arange(text.size(1)))  # [seq_len, embed_dim]
-            pos_embeddings = pos_embeddings.unsqueeze(0)  # [1, seq_len, embed_dim]
-            embedded_input = embedded_input + pos_embeddings  # [1, seq_len, embed_dim]
-            return embedded_input
-        elif dataloader is not None:
-            # Iterate over the dataloader and embed the input_ids
-            for input_ids, _ in dataloader:
-                embedded_input = embedding_layer(input_ids)
-                all_embedded_inputs.append(embedded_input)
-
-            all_embedded_inputs = torch.cat(all_embedded_inputs, dim=0)
-            
-            # Get the position embeddings
-            pos_embeddings = pos_embedding_layer(torch.arange(MAX_LENGTH))
-            # Add the position embeddings to all the input embeddings
-            input_embeddings = all_embedded_inputs + pos_embeddings
-
-            # Concatenate all the embedded inputs and dimension keeps to 0 so that it doesn't change the batch size
-            # return size (num_batches × batch_size, max_length, output_dim)
-            return input_embeddings
-    
     def preprocess(self, text = None):
         if text is not None:
-            text = self.clean_text(text)
-            text = torch.tensor(text).unsqueeze(0) # shape [1, seq_len]
-            return self.embedding(text = text) # shape [1, seq_len, OUTPUT_DIM]
+            token_ids = self.clean_text(text)
+            return torch.tensor(token_ids).unsqueeze(0)  # Return raw token IDs: [1, seq_len]
         else:
             self.load_text()
             self.clean_text()
             dataloader = self.create_dataloader()
-            input_embeddings = self.embedding(dataloader=dataloader)
-            return input_embeddings
+            return dataloader  # Return dataloader with raw token IDs
 
 ### sinusoidal positional embedding:-
 

@@ -66,7 +66,7 @@ class TransformerBlock(nn.Module):
         self.attention = multihead_attention(
             d_input = OUTPUT_DIM,
             d_output = OUTPUT_DIM,
-            context_length = OUTPUT_DIM,
+            context_length = MAX_LENGTH,
             num_heads = N_HEADS,
             dropout = DROPOUT,
             qkv_bias = qkv_bias # False
