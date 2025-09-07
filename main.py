@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from config import *
 from model.architecture import TransformerBlock, LayerNorm
-from data_prep.preprocess_text import PreprocessText
 
 class kaitomodel(nn.Module):
     def __init__(self):

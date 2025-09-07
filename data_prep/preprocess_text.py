@@ -64,22 +64,35 @@ class PreprocessText:
             self.text = " ".join(result)
     
     # Provides batching, shuffling, and parallel loading of data from a Dataset
-    def create_dataloader(self, shuffle=True, drop_last=True, num_workers=0):
+    def create_dataloader(self, shuffle=True, drop_last=True, num_workers=0, train_test_split = 0.9):
         print(f"[DEBUG] Number of tokens in text: {len(tokenizer.encode(self.text))}")
 
         # Create dataset
         dataset = GPTDataset(self.text, tokenizer)
+        total_samples = len(dataset)
+        train_size = int(train_test_split * total_samples)
+        test_size = total_samples - train_size
+        train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-        # Create dataloader
-        dataloader = DataLoader(
-            dataset,
+        # training dataloader
+        train_dataloader = DataLoader(
+            train_dataset,
             batch_size=BATCH_SIZE,
             shuffle=shuffle,
             drop_last=drop_last,
             num_workers=num_workers
         )
 
-        return dataloader
+        # testing dataloader
+        test_dataloader = DataLoader(
+            test_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=shuffle,
+            drop_last=drop_last,
+            num_workers=num_workers
+        )
+
+        return train_dataloader, test_dataloader
     
     def preprocess(self, text = None):
         if text is not None:
@@ -88,8 +101,7 @@ class PreprocessText:
         else:
             self.load_text()
             self.clean_text()
-            dataloader = self.create_dataloader()
-            return dataloader  # Return dataloader with raw token IDs
+            return self.create_dataloader()  # Return dataloader with raw token IDs
 
 ### sinusoidal positional embedding:-
 
