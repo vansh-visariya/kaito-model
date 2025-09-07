@@ -13,6 +13,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 from config import *
+tokenizer = tiktoken.get_encoding("gpt2")
 
 # define how your data is stored and how it's accessed
 class GPTDataset(Dataset):
@@ -50,17 +51,20 @@ class PreprocessText:
         with open(self.file_path, 'r', encoding='utf-8') as file:
             self.text = file.read()
         
-    def clean_text(self):
+    def clean_text(self, text=None):
         # Split the text into words, keeping the punctuation and whitespace
-        result = re.split(r'([,.:;?_!"()\']|--|\s)', self.text)
-        result = [item.strip() for item in result if item.strip()]
-        self.text = " ".join(result)
+        if text is not None:
+            result = re.split(r'([,.:;?_!"()\']|--|\s)', text)
+            result = [item.strip() for item in result if item.strip()]
+            result =  " ".join(result)
+            return tokenizer.encode(result, allowed_special={"<|endoftext|>"}) # shape [seq_len]
+        else:
+            result = re.split(r'([,.:;?_!"()\']|--|\s)', self.text)
+            result = [item.strip() for item in result if item.strip()]
+            self.text = " ".join(result)
     
     # Provides batching, shuffling, and parallel loading of data from a Dataset
     def create_dataloader(self, shuffle=True, drop_last=True, num_workers=0):
-        # Initialize the tokenizer
-        tokenizer = tiktoken.get_encoding("gpt2")
-
         print(f"[DEBUG] Number of tokens in text: {len(tokenizer.encode(self.text))}")
 
         # Create dataset
@@ -77,38 +81,48 @@ class PreprocessText:
 
         return dataloader
     
-    def embedding(self, dataloader):
+    def embedding(self, dataloader=None, text=None):
         embedding_layer = torch.nn.Embedding(VOCAB_SIZE, OUTPUT_DIM) # token emdedding (50257, 768)
-        all_embedded_inputs = []
 
-        print("[DEBUG] Dataloader length:", len(dataloader))
-
-        # Iterate over the dataloader and embed the input_ids
-        for input_ids, _ in dataloader:
-            embedded_input = embedding_layer(input_ids)
-            all_embedded_inputs.append(embedded_input)
-
-        all_embedded_inputs = torch.cat(all_embedded_inputs, dim=0)
-        
         ## Here i can also use different type of positional embedding like sinusoidal embedding and rotary embedding
         # This is learned positional embedding
-        pos_embedding_layer = torch.nn.Embedding(MAX_LENGTH, OUTPUT_DIM)
+        pos_embedding_layer = torch.nn.Embedding(MAX_LENGTH, OUTPUT_DIM) # position embedding (512, 768)
+        all_embedded_inputs = []
 
-        # Get the position embeddings
-        pos_embeddings = pos_embedding_layer(torch.arange(MAX_LENGTH))
-        # Add the position embeddings to all the input embeddings
-        input_embeddings = all_embedded_inputs + pos_embeddings
+        if text is not None:
+            embedded_input = embedding_layer(text)  # shape: [1, seq_len, embed_dim]
+            pos_embeddings = pos_embedding_layer(torch.arange(text.size(1)))  # [seq_len, embed_dim]
+            pos_embeddings = pos_embeddings.unsqueeze(0)  # [1, seq_len, embed_dim]
+            embedded_input = embedded_input + pos_embeddings  # [1, seq_len, embed_dim]
+            return embedded_input
+        elif dataloader is not None:
+            # Iterate over the dataloader and embed the input_ids
+            for input_ids, _ in dataloader:
+                embedded_input = embedding_layer(input_ids)
+                all_embedded_inputs.append(embedded_input)
 
-        # Concatenate all the embedded inputs and dimension keeps to 0 so that it doesn't change the batch size
-        # return size (num_batches × batch_size, max_length, output_dim)
-        return input_embeddings
+            all_embedded_inputs = torch.cat(all_embedded_inputs, dim=0)
+            
+            # Get the position embeddings
+            pos_embeddings = pos_embedding_layer(torch.arange(MAX_LENGTH))
+            # Add the position embeddings to all the input embeddings
+            input_embeddings = all_embedded_inputs + pos_embeddings
+
+            # Concatenate all the embedded inputs and dimension keeps to 0 so that it doesn't change the batch size
+            # return size (num_batches × batch_size, max_length, output_dim)
+            return input_embeddings
     
-    def preprocess(self):
-        self.load_text()
-        self.clean_text()
-        dataloader = self.create_dataloader()
-        input_embeddings = self.embedding(dataloader)
-        return input_embeddings
+    def preprocess(self, text = None):
+        if text is not None:
+            text = self.clean_text(text)
+            text = torch.tensor(text).unsqueeze(0) # shape [1, seq_len]
+            return self.embedding(text = text) # shape [1, seq_len, OUTPUT_DIM]
+        else:
+            self.load_text()
+            self.clean_text()
+            dataloader = self.create_dataloader()
+            input_embeddings = self.embedding(dataloader=dataloader)
+            return input_embeddings
 
 ### sinusoidal positional embedding:-
 

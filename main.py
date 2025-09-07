@@ -12,16 +12,9 @@ class kaitomodel(nn.Module):
         self.final_norm = LayerNorm(OUTPUT_DIM)
         self.out_head = nn.Linear(OUTPUT_DIM, VOCAB_SIZE, bias=False)
     
-    def forward(self,input_ids):
+    def forward(self, input_ids):
         x = self.dropout(input_ids)
         x = self.trf_block(x)
         x = self.final_norm(x)
-        logits = self.out_head(x)
+        logits = self.out_head(x)  # logits = [num_batches × batch_size, max_length, vocab_size]
         return logits
-
-if __name__ == "__main__":
-    embedder = PreprocessText()
-    input = embedder.preprocess()
-    model = kaitomodel()
-    logits = model(input_ids=input)
-    print(logits.shape)
