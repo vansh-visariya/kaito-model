@@ -51,17 +51,17 @@ class PreprocessText:
         with open(self.file_path, 'r', encoding='utf-8') as file:
             self.text = file.read()
         
-    def clean_text(self, text=None):
-        # Split the text into words, keeping the punctuation and whitespace
-        if text is not None:
-            result = re.split(r'([,.:;?_!"()\']|--|\s)', text)
-            result = [item.strip() for item in result if item.strip()]
-            result =  " ".join(result)
-            return tokenizer.encode(result, allowed_special={"<|endoftext|>"}) # shape [seq_len]
-        else:
-            result = re.split(r'([,.:;?_!"()\']|--|\s)', self.text)
-            result = [item.strip() for item in result if item.strip()]
-            self.text = " ".join(result)
+    def _split_and_join(self, text):
+        result = re.split(r'([,.:;?_!"()\']|--|\s)', text)
+        result = [item.strip() for item in result if item.strip()]
+        return " ".join(result)
+
+    def clean_text(self):
+        self.text = self._split_and_join(self.text)
+
+    def tokenize_text(self, text):
+        cleaned = self._split_and_join(text)
+        return tokenizer.encode(cleaned, allowed_special={"<|endoftext|>"})
     
     # Provides batching, shuffling, and parallel loading of data from a Dataset
     def create_dataloader(self, shuffle=True, drop_last=True, num_workers=0, train_test_split = 0.9):
@@ -94,14 +94,14 @@ class PreprocessText:
 
         return train_dataloader, test_dataloader
     
-    def preprocess(self, text = None):
+    def preprocess(self, text=None):
         if text is not None:
-            token_ids = self.clean_text(text)
-            return torch.tensor(token_ids).unsqueeze(0)  # Return raw token IDs: [1, seq_len]
+            token_ids = self.tokenize_text(text)
+            return torch.tensor(token_ids).unsqueeze(0)
         else:
             self.load_text()
             self.clean_text()
-            return self.create_dataloader()  # Return dataloader with raw token IDs
+            return self.create_dataloader()
 
 ### sinusoidal positional embedding:-
 

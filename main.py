@@ -19,6 +19,11 @@ class kaitomodel(nn.Module):
         # input_ids shape: [batch_size, seq_len]
         batch_size, seq_len = input_ids.shape
         
+        # Truncate to max supported sequence length to prevent position embedding OOB
+        if seq_len > MAX_LENGTH:
+            input_ids = input_ids[:, -MAX_LENGTH:]
+            seq_len = MAX_LENGTH
+        
         # Get token embeddings
         token_embeds = self.token_embedding(input_ids)  # [batch_size, seq_len, embed_dim]
         
