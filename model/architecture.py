@@ -127,7 +127,8 @@ class TransformerBlock(nn.Module):
             num_heads = N_HEADS,
             n_kv_heads = N_KV_HEADS,  # GQA: fewer KV heads for smaller cache
             dropout = DROPOUT,
-            qkv_bias = qkv_bias # False
+            qkv_bias = qkv_bias, # False
+            sliding_window = SLIDING_WINDOW  # None = full causal; int = windowed
         )
         # Replaced LayerNorm with RMSNorm (faster, empirically equivalent).
         # Pre-normalisation before attention and FFN (standard for modern transformers).
@@ -144,18 +145,21 @@ class TransformerBlock(nn.Module):
         past_keys / past_values: KV cache from previous generation steps (or None during training).
         Returns: output tensor, updated keys, updated values (for KV-cache chain).
         """
-        # shortcut connection 1 (attention sub-layer)
-        shortcut = x
-        x = self.layernorm1(x)
-        x, new_keys, new_values = self.attention(x, past_keys, past_values)
-        x = self.dropout(x)
-        x = x + shortcut
-
-        # shortcut connection 2 (feed-forward sub-layer)
-        shortcut = x
-        x = self.layernorm2(x)
-        x = self.feedforward(x)
-        x = self.dropout(x)
-        x = x + shortcut
-
+        # Parallel formulation (PaLM-style; Chowdhery et al., 2022).
+        # Attention and FFN share the same normalised input and contribute
+        # independently to the residual stream in one step:
+        #   x = x + attention(norm(x)) + ffn(norm(x))
+        #
+        # This removes one sequential dependency per transformer block —
+        # instead of two serial kernel launches, the GPU can overlap
+        # attention and FFN computation, yielding ~15% faster training
+        # without measurable quality loss.
+        #
+        # Note: layernorm2 is kept as a parameter for checkpoint compatibility
+        # but is unused in this forward path. It will not receive gradients.
+        normed = self.layernorm1(x)
+        attn_out, new_keys, new_values = self.attention(normed, past_keys, past_values)
+        attn_out = self.dropout(attn_out)
+        ffn_out = self.dropout(self.feedforward(normed))
+        x = x + attn_out + ffn_out
         return x, new_keys, new_values

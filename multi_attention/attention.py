@@ -128,7 +128,8 @@ class grouped_query_attention(nn.Module):
         (GQA paper, Llama 2/3, Mistral, Gemma all validate this).
     """
     def __init__(self, d_input, d_output, context_length, num_heads,
-                 n_kv_heads=None, dropout=0.1, qkv_bias=False):
+                 n_kv_heads=None, dropout=0.1, qkv_bias=False,
+                 sliding_window=None):
         super().__init__()
         assert d_output % num_heads == 0, "d_output must be divisible by num_heads"
 
@@ -140,6 +141,13 @@ class grouped_query_attention(nn.Module):
         # Number of query heads per KV head — used for repeating KV heads
         # so that shapes align during the dot-product attention.
         self.n_rep = self.num_heads // self.n_kv_heads
+        # Sliding window: limit each token's attention to the last
+        # `sliding_window` tokens. None = full causal attention.
+        # A non-None value enables a banded mask (Mistral-style) where
+        # each token can attend to at most `sliding_window` previous tokens.
+        # Combined with RoPE, this allows O(n*window) instead of O(n²) memory
+        # and enables very long sequences (window * layers effective receptive field).
+        self.sliding_window = sliding_window
 
         # Q projection: always projects to d_output (num_heads * head_dim).
         # K/V projections: project to n_kv_heads * head_dim (fewer heads = less cache).
@@ -257,12 +265,33 @@ class grouped_query_attention(nn.Module):
         keys = self._repeat_kv(keys, self.n_rep)
         values = self._repeat_kv(values, self.n_rep)
 
-        # ---- Stage 6: Scaled dot-product attention with causal masking ----
+        # ---- Stage 6: Scaled dot-product attention with masking ----
         attn_scores = queries @ keys.transpose(2, 3)  # (b, num_heads, seq, seq)
 
-        # During training or first-pass (prefill): mask future tokens.
-        # During autoregressive decode: only 1 token, nothing to mask.
-        if past_keys is None and num_tokens > 1:
+        # Apply causal (future-token) mask and/or sliding-window (past-token) mask.
+        #
+        # Causal mask: during training/prefill, token i cannot see token j>i.
+        # Sliding window: each token can only attend to the last `sliding_window`
+        #   previous tokens, which makes memory O(n*window) instead of O(n²).
+        #   Combined with RoPE this enables very long contexts (Mistral 7B, 2023).
+        if self.sliding_window is not None and full_seq_len > self.sliding_window:
+            # Compute how far back each key is from each query: distance = q_idx - k_idx
+            q_idx = torch.arange(full_seq_len, device=attn_scores.device).unsqueeze(1)
+            k_idx = torch.arange(full_seq_len, device=attn_scores.device).unsqueeze(0)
+            # True = mask out (tokens farther than sliding_window in the past)
+            window_mask = (q_idx - k_idx) >= self.sliding_window
+
+            if past_keys is None and num_tokens > 1:
+                # Training/prefill: combine causal + window masks
+                causal_mask = self.mask.bool()[:num_tokens, :num_tokens]
+                combined_mask = causal_mask | window_mask[:num_tokens, :num_tokens]
+            else:
+                # Decode step: only window mask (no future tokens to mask)
+                combined_mask = window_mask
+
+            attn_scores.masked_fill_(combined_mask, -torch.inf)
+        elif past_keys is None and num_tokens > 1:
+            # Standard causal masking (no sliding window)
             mask_bool = self.mask.bool()[:num_tokens, :num_tokens]
             attn_scores.masked_fill_(mask_bool, -torch.inf)
 

@@ -14,6 +14,9 @@ LEARNING_RATE = 0.0001
 
 qkv_bias = False
 
+## Attention — sliding window for extended context
+SLIDING_WINDOW = None   # None = full causal attention; int = max tokens each token can attend to
+
 ## Training — gradient scaling, regularisation & LR schedule
 ACCUMULATION_STEPS = 4    # gradient accumulation: simulates BATCH_SIZE*4 effective batch
 GRAD_CLIP_MAX_NORM = 1.0  # max gradient norm for clipping (prevents gradient explosion)
