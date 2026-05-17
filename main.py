@@ -12,6 +12,12 @@ class kaitomodel(nn.Module):
         # This saves 512 * 768 = 393K parameters and removes the hard
         # max-length constraint (RoPE extrapolates to arbitrary lengths).
         self.token_embedding = nn.Embedding(VOCAB_SIZE, OUTPUT_DIM)
+        # Reinitialise embedding weights with smaller std (0.02 instead of N(0,1)).
+        # With weight tying (below), the embedding weight is also used as the output
+        # projection. Default Embedding init (N(0,1)) produces logit std ≈ sqrt(768) ≈ 27.7,
+        # making initial cross-entropy loss ~700 instead of ~log(50257) ≈ 10.8.
+        # Std 0.02 matches GPT-2/Llama convention and gives reasonable logit scales.
+        nn.init.normal_(self.token_embedding.weight, mean=0.0, std=0.02)
         
         self.dropout = nn.Dropout(DROPOUT)
         # ModuleList (not Sequential) so we can pass KV-cache through each block individually
@@ -20,6 +26,13 @@ class kaitomodel(nn.Module):
         # equivalent — used by Llama, Mistral, Gemma.
         self.final_norm = RMSNorm(OUTPUT_DIM)
         self.out_head = nn.Linear(OUTPUT_DIM, VOCAB_SIZE, bias=False)
+        
+        # Weight tying: share the weight matrix between token_embedding and out_head.
+        # The embedding layer learns a "meaning space" for tokens, and the output
+        # head projects to the same space. Tying ensures consistency: a token's
+        # embedding is the representation that should cause the model to predict
+        # that token. This also saves ~38.6M parameters (the entire output head).
+        self.out_head.weight = self.token_embedding.weight
     
     def forward(self, input_ids, past_key_values=None):
         """

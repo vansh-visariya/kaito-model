@@ -165,18 +165,15 @@ The training pipeline includes:
 ```python
 from train import train_model
 from main import kaitomodel
-import torch.optim as optim
 
-# Initialize model and optimizer
+# Initialize model (optimizer is created internally as AdamW)
 model = kaitomodel()
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
 # Train model
 train_losses, val_losses, tokens_seen = train_model(
     model=model,
     train_loader=train_loader,
     val_loader=val_loader,
-    optimizer=optimizer,
     device=device,
     num_epochs=10,
     eval_freq=100,
@@ -369,7 +366,6 @@ from main import kaitomodel
 from data_prep.preprocess_text import PreprocessText
 from train import train_model
 import torch
-import torch.optim as optim
 import tiktoken
 
 # 2. Initialize components
@@ -383,14 +379,13 @@ train_loader, val_loader = preprocessor.preprocess()
 # 4. Set up training
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
-# 5. Train the model
+# 5. Train the model (AdamW optimizer created internally with weight decay,
+#    warmup + cosine LR scheduler, and Z-loss for logit stabilisation)
 train_losses, val_losses, tokens_seen = train_model(
     model=model,
     train_loader=train_loader,
     val_loader=val_loader,
-    optimizer=optimizer,
     device=device,
     num_epochs=5,
     eval_freq=50,
