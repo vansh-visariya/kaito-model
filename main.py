@@ -1,26 +1,32 @@
 import torch
 import torch.nn as nn
 from config import *
-from model.architecture import TransformerBlock, LayerNorm
+from model.architecture import TransformerBlock, RMSNorm
 
 class kaitomodel(nn.Module):
     def __init__(self):
         super().__init__()
-        # Add embedding layers to the model
+        # Token embedding: maps vocabulary indices to dense vectors.
+        # Positional information is now injected inside attention via RoPE,
+        # so we don't need a learned position embedding table anymore.
+        # This saves 512 * 768 = 393K parameters and removes the hard
+        # max-length constraint (RoPE extrapolates to arbitrary lengths).
         self.token_embedding = nn.Embedding(VOCAB_SIZE, OUTPUT_DIM)
-        self.pos_embedding = nn.Embedding(MAX_LENGTH, OUTPUT_DIM)
         
         self.dropout = nn.Dropout(DROPOUT)
         # ModuleList (not Sequential) so we can pass KV-cache through each block individually
         self.trf_block = nn.ModuleList([TransformerBlock() for _ in range(N_LAYERS)])
-        self.final_norm = LayerNorm(OUTPUT_DIM)
+        # RMSNorm is faster than LayerNorm (~15-25% fewer FLOPs) and empirically
+        # equivalent — used by Llama, Mistral, Gemma.
+        self.final_norm = RMSNorm(OUTPUT_DIM)
         self.out_head = nn.Linear(OUTPUT_DIM, VOCAB_SIZE, bias=False)
     
     def forward(self, input_ids, past_key_values=None):
         """
         input_ids: (batch_size, seq_len)
         past_key_values: list of (keys, values) tuples, one per layer, or None.
-                         Each keys/values tensor has shape (batch, n_heads, past_len, head_dim).
+                         Each keys tensor has shape (batch, n_kv_heads, past_len, head_dim).
+                         Each values tensor has shape (batch, n_kv_heads, past_len, head_dim).
 
         Returns: (logits, new_key_values)
                  logits: (batch_size, seq_len, vocab_size)
@@ -31,20 +37,16 @@ class kaitomodel(nn.Module):
         """
         batch_size, seq_len = input_ids.shape
 
-        # Truncate to max supported sequence length to prevent position embedding OOB
+        # Safety guard: truncate excessively long sequences.
+        # With RoPE this is no longer strictly required (RoPE extrapolates),
+        # but it prevents silent OOM from absurdly long inputs.
         if seq_len > MAX_LENGTH:
             input_ids = input_ids[:, -MAX_LENGTH:]
             seq_len = MAX_LENGTH
 
-        # Get token embeddings
-        token_embeds = self.token_embedding(input_ids)  # [batch_size, seq_len, embed_dim]
-
-        # Get position embeddings
-        positions = torch.arange(seq_len, device=input_ids.device)
-        pos_embeds = self.pos_embedding(positions)  # [seq_len, embed_dim]
-
-        # Combine embeddings
-        x = token_embeds + pos_embeds  # Broadcasting: [batch_size, seq_len, embed_dim]
+        # Token embeddings only — RoPE inside the attention layers provides
+        # positional information, so we don't add learned position embeddings.
+        x = self.token_embedding(input_ids)  # [batch_size, seq_len, embed_dim]
 
         x = self.dropout(x)
 

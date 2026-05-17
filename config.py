@@ -7,6 +7,7 @@ STRIDE = 256
 VOCAB_SIZE = 50257
 OUTPUT_DIM = 768
 N_HEADS = 12
+N_KV_HEADS = 4  # GQA: 4 KV heads shared across 12 query heads (3:1 ratio)
 N_LAYERS = 12
 DROPOUT = 0.1
 LEARNING_RATE = 0.0001
