@@ -56,7 +56,17 @@ class multihead_attention(nn.Module):
                        diagonal=1)
         )
     
-    def forward(self, x):
+    def forward(self, x, past_keys=None, past_values=None):
+        """
+        x: input tensor (batch, num_tokens, d_in)
+        past_keys: cached keys from previous steps (batch, num_heads, past_len, head_dim) or None
+        past_values: cached values from previous steps (batch, num_heads, past_len, head_dim) or None
+
+        During training: past_keys/past_values are None, full sequence processed with causal mask.
+        During inference with KV cache: past_keys/past_values hold all previous tokens' K/V.
+           Only the single new token is in x. New K/V are computed and concatenated with cache.
+           This avoids O(n²) recomputation — each step only does O(n) attention.
+        """
         b, num_tokens, d_in = x.shape
 
         keys = self.W_key(x) # Shape: (batch_size, num_tokens, d_out)
@@ -74,15 +84,31 @@ class multihead_attention(nn.Module):
         queries = queries.transpose(1, 2)
         values = values.transpose(1, 2)
 
+        # KV cache: append new K/V to cached K/V
+        if past_keys is not None and past_values is not None:
+            # Concatenate along the sequence-length dimension (dim=2)
+            # past_keys: (b, num_heads, past_len, head_dim)
+            # keys:      (b, num_heads, 1, head_dim)  — only the new token
+            # result:    (b, num_heads, past_len+1, head_dim)
+            keys = torch.cat([past_keys, keys], dim=2)
+            values = torch.cat([past_values, values], dim=2)
+
+        # Full sequence length (past_len + new_tokens) — used for the causal mask
+        full_seq_len = keys.size(2)
+
         # Compute scaled dot-product attention (aka self-attention) with a causal mask
         attn_scores = queries @ keys.transpose(2, 3)  # Dot product for each head
 
-        # Original mask truncated to the number of tokens and converted to boolean
-        mask_bool = self.mask.bool()[:num_tokens, :num_tokens]  # top left upper triangle
+        # Causal masking 
+        # During training (past_keys=None, num_tokens>1): mask future tokens.
+        # During inference with KV cache (past_keys != None, num_tokens=1): no future tokens to mask.
+        if past_keys is None and num_tokens > 1:
+            # Training / first-pass inference: mask so token i can't see token j>i
+            mask_bool = self.mask.bool()[:num_tokens, :num_tokens]  # top left upper triangle
+            attn_scores.masked_fill_(mask_bool, -torch.inf)
+        # (If past_keys is not None, we are generating 1 token at a time,
+        #  so there are no future tokens to mask — the new token attends to all past + itself.)
 
-        # Use the mask to fill attention scores
-        attn_scores.masked_fill_(mask_bool, -torch.inf)
-        
         attn_weights = torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)   # softmax(attn_scores / sqrt(head_dim))
         attn_weights = self.dropout(attn_weights)
 
@@ -96,4 +122,5 @@ class multihead_attention(nn.Module):
         # The output is a new (2, 512, 768) tensor where each token's vector is now context-aware, 
         # containing information from itself and all previous tokens.
 
-        return context_vec
+        # Return updated keys/values so the caller can cache them for the next generation step
+        return context_vec, keys, values

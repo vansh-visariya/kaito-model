@@ -14,7 +14,7 @@ from config import *
 def cal_loss_batch(input_batch, target_batch,model, device):
     input_batch = input_batch.to(device)
     target_batch = target_batch.to(device)
-    logits = model(input_batch)
+    logits, _ = model(input_batch)  # model now returns (logits, kv_cache); discard cache during training
     loss = nn.functional.cross_entropy(logits.flatten(0,1), target_batch.flatten())
     return loss
 
