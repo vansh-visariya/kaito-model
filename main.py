@@ -21,7 +21,11 @@ class kaitomodel(nn.Module):
         
         self.dropout = nn.Dropout(DROPOUT)
         # ModuleList (not Sequential) so we can pass KV-cache through each block individually
-        self.trf_block = nn.ModuleList([TransformerBlock() for _ in range(N_LAYERS)])
+        # Each transformer block can optionally use MoE (sparse FFN) instead
+        # of a dense FFN. The USE_MOE flag controls this globally.
+        self.trf_block = nn.ModuleList(
+            [TransformerBlock(use_moe=USE_MOE) for _ in range(N_LAYERS)]
+        )
         # RMSNorm is faster than LayerNorm (~15-25% fewer FLOPs) and empirically
         # equivalent — used by Llama, Mistral, Gemma.
         self.final_norm = RMSNorm(OUTPUT_DIM)

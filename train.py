@@ -114,6 +114,16 @@ def train_model(model, train_loader, val_loader, device, num_epochs,
             loss = cal_loss_batch(input_batch, target_batch, model, device,
                                   z_loss_coeff=Z_LOSS_COEFF)
 
+            # Collect MoE load-balancing auxiliary losses from all blocks.
+            # Each MoE layer stores its aux loss after the forward pass;
+            # we sum them here and add to the total loss.
+            if USE_MOE:
+                moe_aux_loss = 0.0
+                for block in model.trf_block:
+                    if block.use_moe:
+                        moe_aux_loss = moe_aux_loss + block.feedforward.last_aux_loss
+                loss = loss + MOE_LOSS_COEFF * moe_aux_loss
+
             # Gradient accumulation
             # Divide by ACCUMULATION_STEPS so that after ACCUMULATION_STEPS
             # backward passes the total gradient matches what a single large

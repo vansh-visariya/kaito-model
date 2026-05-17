@@ -24,6 +24,12 @@ WEIGHT_DECAY = 0.1        # AdamW decoupled weight decay (0.1 is standard for LL
 WARMUP_RATIO = 0.05       # fraction of total optimizer steps for LR warmup
 Z_LOSS_COEFF = 1e-4       # auxiliary loss penalising logit magnitudes (PaLM-style)
 
+## Mixture of Experts (MoE) — replaces every FFN with a sparse set of experts
+USE_MOE = False        # set True to replace each FFN with an MoE layer
+N_EXPERTS = 8          # total number of expert FFNs (only ~top_k active per token)
+MOE_TOP_K = 2          # number of experts activated per token (top-2 routing)
+MOE_LOSS_COEFF = 0.01  # coefficient for load-balancing auxiliary loss
+
 ## Generation — sampling defaults
 TEMPERATURE = 1.0    # lower = sharper (0=argmax); higher = more random
 TOP_K = 50           # 0 = disabled; 50 means sample from top-50 tokens only (arXiv:1805.04833)
