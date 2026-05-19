@@ -6,3 +6,5 @@ tiktoken
 jupyterlab
 matplotlib
 torch
+datasets
+huggingface_hub
