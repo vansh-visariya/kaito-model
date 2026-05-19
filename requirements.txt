@@ -1,6 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cu132
+
 pandas
 numpy
-torch
 tiktoken
 jupyterlab
 matplotlib
+torch

@@ -56,9 +56,12 @@ def generate_text(model, prompt, tokenizer,
     """
     model.eval()
 
+    # Get model device
+    device = next(model.parameters()).device
+
     # Tokenize the prompt once and keep raw IDs (no decode/re-encode drift)
     token_ids = tokenizer.encode(prompt, allowed_special={"<|endoftext|>"})
-    token_ids = torch.tensor(token_ids, dtype=torch.long).unsqueeze(0)
+    token_ids = torch.tensor(token_ids, dtype=torch.long, device=device).unsqueeze(0)
 
     past_key_values = None  # Will become a list of (keys, values) tuples, one per layer
 
